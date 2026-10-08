@@ -3,6 +3,7 @@
 SQL ausprobieren an einer echten SQLite-Datenbank – direkt im Browser, ohne Installation und ohne Server.
 
 Die Beispieldatenbank ist eine kleine Lager-Firma mit sieben fertig gefüllten Tabellen.
+Demo Webseite: https://julianharder.github.io/SQL-Spielplatz/
 
 ## Was er kann
 
