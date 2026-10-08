@@ -1,0 +1,444 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SQL-Spielplatz – SQL lernen im Browser</title>
+  <style>
+    :root {
+      --bg: #0b111e;
+      --flaeche: #131b2c;
+      --flaeche-2: #1a2438;
+      --rand: #2a3752;
+      --text: #e6ebf5;
+      --text-leise: #93a1bd;
+      --akzent: #7cb4ff;
+      --gut: #4ade80;
+      --fehler: #f87171;
+      --mono: "JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font: 16px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif;
+      min-height: 100vh;
+    }
+    header { padding: 20px 24px 8px; }
+    header h1 { font-size: 1.5rem; }
+    header p { color: var(--text-leise); max-width: 70ch; }
+
+    .raster {
+      display: grid;
+      grid-template-columns: 280px minmax(0, 1fr);
+      gap: 16px;
+      padding: 16px 24px 32px;
+      align-items: start;
+    }
+    @media (max-width: 860px) { .raster { grid-template-columns: 1fr; padding: 12px 16px 24px; } }
+
+    .karte {
+      background: var(--flaeche);
+      border: 1px solid var(--rand);
+      border-radius: 12px;
+      padding: 14px 16px;
+    }
+    .karte + .karte { margin-top: 16px; }
+    h2 { font-size: 0.8rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-leise); margin-bottom: 10px; }
+
+    /* Tabellenübersicht */
+    .tabelle-name {
+      font-family: var(--mono);
+      font-weight: 600;
+      color: var(--akzent);
+      background: none;
+      border: 0;
+      cursor: pointer;
+      padding: 2px 0;
+      font-size: 0.95rem;
+    }
+    .tabelle-name:hover, .tabelle-name:focus-visible { text-decoration: underline; }
+    .spalten { list-style: none; margin: 2px 0 12px 10px; font-family: var(--mono); font-size: 0.85rem; color: var(--text-leise); }
+    .spalten li span { opacity: 0.7; }
+
+    /* Lektionen */
+    .lektionen { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
+    .lektionen button {
+      background: var(--flaeche-2);
+      color: var(--text-leise);
+      border: 1px solid var(--rand);
+      border-radius: 999px;
+      padding: 3px 12px;
+      font: inherit;
+      font-size: 0.85rem;
+      cursor: pointer;
+    }
+    .lektionen button[aria-current="true"] { color: var(--bg); background: var(--akzent); border-color: var(--akzent); font-weight: 600; }
+    .lektionen button.erledigt::after { content: " ✓"; }
+    #lektion-titel { font-size: 1.1rem; margin-bottom: 4px; }
+    #lektion-text { color: var(--text-leise); margin-bottom: 8px; }
+    .aufgabe { border-left: 3px solid var(--akzent); padding: 4px 0 4px 12px; margin-top: 10px; }
+    .aufgabe strong { color: var(--akzent); }
+
+    /* Editor */
+    textarea {
+      width: 100%;
+      min-height: 130px;
+      resize: vertical;
+      background: #0a0f1a;
+      color: var(--text);
+      border: 1px solid var(--rand);
+      border-radius: 8px;
+      padding: 12px;
+      font: 0.95rem/1.5 var(--mono);
+      tab-size: 2;
+    }
+    textarea:focus-visible, button:focus-visible { outline: 2px solid var(--akzent); outline-offset: 2px; }
+    .knoepfe { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; align-items: center; }
+    .knopf {
+      background: var(--flaeche-2);
+      color: var(--text);
+      border: 1px solid var(--rand);
+      border-radius: 8px;
+      padding: 7px 14px;
+      font: inherit;
+      font-size: 0.9rem;
+      cursor: pointer;
+    }
+    .knopf:hover { border-color: var(--akzent); }
+    .knopf--haupt { background: var(--akzent); color: var(--bg); border-color: var(--akzent); font-weight: 600; }
+    .tipp { color: var(--text-leise); font-size: 0.8rem; margin-left: auto; }
+
+    /* Ergebnis */
+    #status { margin-bottom: 8px; font-size: 0.9rem; min-height: 1.4em; }
+    #status.fehler { color: var(--fehler); font-family: var(--mono); }
+    #status.gut { color: var(--gut); }
+    .ergebnis { overflow: auto; max-height: 420px; border: 1px solid var(--rand); border-radius: 8px; }
+    table { border-collapse: collapse; width: 100%; font-family: var(--mono); font-size: 0.85rem; }
+    th, td { text-align: left; padding: 6px 12px; border-bottom: 1px solid var(--rand); white-space: nowrap; }
+    th { position: sticky; top: 0; background: var(--flaeche-2); color: var(--akzent); }
+    td.null { color: var(--text-leise); font-style: italic; }
+    td.zahl { text-align: right; }
+    footer { padding: 0 24px 24px; color: var(--text-leise); font-size: 0.8rem; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>SQL-Spielplatz</h1>
+    <p>Lerne SQL an einer kleinen Lager-Datenbank. Alles läuft direkt in deinem Browser, es wird nichts hochgeladen und du kannst nichts kaputt machen.</p>
+  </header>
+
+  <main class="raster">
+    <aside>
+      <section class="karte" aria-labelledby="schema-titel">
+        <h2 id="schema-titel">Tabellen</h2>
+        <div id="schema"></div>
+      </section>
+    </aside>
+
+    <div>
+      <section class="karte" aria-labelledby="lektion-titel">
+        <h2>Lektionen</h2>
+        <div class="lektionen" id="lektionen" role="group" aria-label="Lektionen"></div>
+        <h3 id="lektion-titel"></h3>
+        <p id="lektion-text"></p>
+        <div class="aufgabe"><strong>Aufgabe:</strong> <span id="lektion-aufgabe"></span></div>
+      </section>
+
+      <section class="karte" aria-label="SQL-Editor">
+        <label for="editor" class="sr-only" style="position:absolute;left:-9999px">SQL-Abfrage</label>
+        <textarea id="editor" spellcheck="false" autocomplete="off" placeholder="SELECT * FROM artikel;"></textarea>
+        <div class="knoepfe">
+          <button class="knopf knopf--haupt" id="ausfuehren" type="button">Ausführen</button>
+          <button class="knopf" id="beispiel" type="button">Beispiel einfügen</button>
+          <button class="knopf" id="loesung" type="button">Lösung zeigen</button>
+          <button class="knopf" id="zuruecksetzen" type="button">Datenbank zurücksetzen</button>
+          <span class="tipp">Strg + Enter führt aus</span>
+        </div>
+      </section>
+
+      <section class="karte" aria-label="Ergebnis" aria-live="polite">
+        <h2>Ergebnis</h2>
+        <p id="status"></p>
+        <div class="ergebnis" id="ergebnis" tabindex="0"></div>
+      </section>
+    </div>
+  </main>
+
+  <footer>SQLite läuft über <a href="https://github.com/sql-js/sql.js" style="color:var(--akzent)">sql.js</a> (WebAssembly) lokal im Browser. Alle Daten sind frei erfunden.</footer>
+
+  <script src="lib/sql-wasm.js"></script>
+  <script>
+    /* --- 1. Beispieldaten (Lager-Thema) --- */
+    const STARTDATEN = `
+      CREATE TABLE kunden (
+        id INTEGER PRIMARY KEY,
+        name TEXT NOT NULL,
+        stadt TEXT NOT NULL
+      );
+      CREATE TABLE artikel (
+        id INTEGER PRIMARY KEY,
+        bezeichnung TEXT NOT NULL,
+        kategorie TEXT NOT NULL,
+        preis REAL NOT NULL,
+        bestand INTEGER NOT NULL
+      );
+      CREATE TABLE bestellungen (
+        id INTEGER PRIMARY KEY,
+        kunde_id INTEGER NOT NULL REFERENCES kunden(id),
+        datum TEXT NOT NULL,
+        status TEXT NOT NULL
+      );
+      CREATE TABLE positionen (
+        id INTEGER PRIMARY KEY,
+        bestellung_id INTEGER NOT NULL REFERENCES bestellungen(id),
+        artikel_id INTEGER NOT NULL REFERENCES artikel(id),
+        menge INTEGER NOT NULL
+      );
+
+      INSERT INTO kunden VALUES
+        (1,'Müller GmbH','Hamburg'), (2,'Schneider & Söhne','Berlin'), (3,'Bäckerei Weber','Hamburg'),
+        (4,'Autohaus Koch','München'), (5,'Praxis Dr. Richter','Köln'), (6,'Gartenbau Lang','Berlin'),
+        (7,'Studio Nord','Kiel');
+
+      INSERT INTO artikel VALUES
+        (1,'Europalette','Verpackung',14.50,120), (2,'Stretchfolie','Verpackung',6.90,300),
+        (3,'Karton 40x30','Verpackung',1.20,2500), (4,'Handscanner','Technik',249.00,12),
+        (5,'Etikettendrucker','Technik',389.00,5), (6,'Sicherheitsschuhe','Schutz',59.90,40),
+        (7,'Warnweste','Schutz',4.50,200), (8,'Gabelstapler-Batterie','Technik',1290.00,2),
+        (9,'Umreifungsband','Verpackung',22.00,0), (10,'Schutzhelm','Schutz',17.80,35);
+
+      INSERT INTO bestellungen VALUES
+        (1,1,'2026-01-12','geliefert'), (2,2,'2026-01-15','geliefert'), (3,1,'2026-02-03','geliefert'),
+        (4,3,'2026-02-10','geliefert'), (5,4,'2026-03-01','storniert'), (6,2,'2026-03-18','unterwegs'),
+        (7,5,'2026-04-02','unterwegs'), (8,1,'2026-04-20','offen'), (9,6,'2026-04-22','offen'),
+        (10,3,'2026-05-05','offen');
+
+      INSERT INTO positionen VALUES
+        (1,1,1,20), (2,1,2,10), (3,2,4,2), (4,2,5,1), (5,3,3,500), (6,3,2,25),
+        (7,4,3,200), (8,5,8,1), (9,6,6,10), (10,6,7,30), (11,7,10,5), (12,8,1,40),
+        (13,8,9,6), (14,9,7,50), (15,9,10,12), (16,10,3,300), (17,10,1,10);
+    `;
+
+    /* --- 2. Lektionen (loesung wird gegen die Eingabe verglichen) --- */
+    const LEKTIONEN = [
+      {
+        kurz: 'SELECT',
+        titel: '1. Daten abfragen mit SELECT',
+        text: 'Mit SELECT wählst du Spalten aus, mit FROM sagst du, aus welcher Tabelle. Das Sternchen * steht für alle Spalten.',
+        beispiel: 'SELECT * FROM artikel;',
+        aufgabe: 'Zeige nur die Bezeichnung und den Preis aller Artikel.',
+        loesung: 'SELECT bezeichnung, preis FROM artikel;'
+      },
+      {
+        kurz: 'WHERE',
+        titel: '2. Filtern mit WHERE',
+        text: 'WHERE behält nur die Zeilen, auf die eine Bedingung zutrifft. Mit AND und OR kombinierst du Bedingungen, Text steht in einfachen Anführungszeichen.',
+        beispiel: "SELECT * FROM artikel WHERE kategorie = 'Technik' AND preis < 300;",
+        aufgabe: 'Welche Artikel sind ausverkauft (Bestand 0)? Zeige alle Spalten.',
+        loesung: 'SELECT * FROM artikel WHERE bestand = 0;'
+      },
+      {
+        kurz: 'ORDER BY',
+        titel: '3. Sortieren und Begrenzen',
+        text: 'ORDER BY sortiert das Ergebnis (ASC aufsteigend, DESC absteigend). LIMIT schneidet nach einer bestimmten Zeilenzahl ab.',
+        beispiel: 'SELECT bezeichnung, preis FROM artikel ORDER BY preis DESC LIMIT 3;',
+        aufgabe: 'Zeige die Bezeichnung der 3 Artikel mit dem größten Bestand, der größte zuerst.',
+        loesung: 'SELECT bezeichnung FROM artikel ORDER BY bestand DESC LIMIT 3;'
+      },
+      {
+        kurz: 'Aggregat',
+        titel: '4. Rechnen über viele Zeilen',
+        text: 'COUNT, SUM, AVG, MIN und MAX fassen viele Zeilen zu einem Wert zusammen. Mit AS gibst du der Spalte einen Namen.',
+        beispiel: 'SELECT COUNT(*) AS anzahl, AVG(preis) AS durchschnitt FROM artikel;',
+        aufgabe: 'Wie viele Bestellungen haben den Status \'offen\'? Nenne die Spalte anzahl.',
+        loesung: "SELECT COUNT(*) AS anzahl FROM bestellungen WHERE status = 'offen';"
+      },
+      {
+        kurz: 'GROUP BY',
+        titel: '5. Gruppieren mit GROUP BY',
+        text: 'GROUP BY bildet Gruppen, und die Aggregatfunktionen rechnen dann je Gruppe. Mit HAVING filterst du die Gruppen nachträglich.',
+        beispiel: 'SELECT kategorie, COUNT(*) AS anzahl FROM artikel GROUP BY kategorie HAVING COUNT(*) > 3;',
+        aufgabe: 'Zeige je Kategorie die Summe der Bestände. Spalten: kategorie, gesamt.',
+        loesung: 'SELECT kategorie, SUM(bestand) AS gesamt FROM artikel GROUP BY kategorie;'
+      },
+      {
+        kurz: 'JOIN',
+        titel: '6. Tabellen verbinden mit JOIN',
+        text: 'Daten stehen in mehreren Tabellen. JOIN ... ON verbindet sie über zusammengehörige Spalten, hier bestellungen.kunde_id mit kunden.id.',
+        beispiel: 'SELECT k.name, b.datum, b.status FROM bestellungen b JOIN kunden k ON k.id = b.kunde_id;',
+        aufgabe: 'Zeige die Namen der Kunden, die in Hamburg sitzen und mindestens eine Bestellung haben, ohne doppelte Namen. Spalte: name.',
+        loesung: "SELECT DISTINCT k.name FROM kunden k JOIN bestellungen b ON b.kunde_id = k.id WHERE k.stadt = 'Hamburg';"
+      },
+      {
+        kurz: 'LEFT JOIN',
+        titel: '7. Auch Zeilen ohne Partner: LEFT JOIN',
+        text: 'JOIN zeigt nur Kunden mit Bestellung. LEFT JOIN behält alle Zeilen der linken Tabelle, fehlende Partner werden NULL. So findest du, was fehlt.',
+        beispiel: 'SELECT k.name, b.id FROM kunden k LEFT JOIN bestellungen b ON b.kunde_id = k.id;',
+        aufgabe: 'Welche Kunden haben noch nie bestellt? Zeige die Spalte name.',
+        loesung: 'SELECT k.name FROM kunden k LEFT JOIN bestellungen b ON b.kunde_id = k.id WHERE b.id IS NULL;'
+      },
+      {
+        kurz: 'Mehrere JOINs',
+        titel: '8. Alles zusammen',
+        text: 'Du kannst beliebig viele Tabellen verbinden. Hier rechnest du den Wert einer Bestellung aus Menge und Preis jeder Position.',
+        beispiel: 'SELECT p.bestellung_id, a.bezeichnung, p.menge * a.preis AS wert FROM positionen p JOIN artikel a ON a.id = p.artikel_id;',
+        aufgabe: 'Wie hoch ist der Gesamtwert jeder Bestellung? Spalten: bestellung_id, wert (Summe aus menge * preis).',
+        loesung: 'SELECT p.bestellung_id, SUM(p.menge * a.preis) AS wert FROM positionen p JOIN artikel a ON a.id = p.artikel_id GROUP BY p.bestellung_id;'
+      }
+    ];
+
+    /* --- 3. Zustand und Hilfsfunktionen --- */
+    let db = null;
+    let aktuell = 0;
+    const erledigt = new Set();
+    const el = id => document.getElementById(id);
+
+    function neueDatenbank(SQL) {
+      if (db) db.close();
+      db = new SQL.Database();
+      db.run(STARTDATEN);
+    }
+
+    function zeichneSchema() {
+      const ziel = el('schema');
+      ziel.textContent = '';
+      const tabellen = db.exec("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name")[0].values.flat();
+      for (const name of tabellen) {
+        const knopf = document.createElement('button');
+        knopf.type = 'button';
+        knopf.className = 'tabelle-name';
+        knopf.textContent = name;
+        knopf.title = 'Klicken, um eine Abfrage einzufügen';
+        knopf.addEventListener('click', () => { el('editor').value = `SELECT * FROM ${name};`; el('editor').focus(); });
+        const liste = document.createElement('ul');
+        liste.className = 'spalten';
+        for (const [, spalte, typ, , , pk] of db.exec(`PRAGMA table_info(${name})`)[0].values) {
+          const li = document.createElement('li');
+          li.textContent = spalte + (pk ? ' 🔑' : '') + ' ';
+          const t = document.createElement('span');
+          t.textContent = typ.toLowerCase();
+          li.append(t);
+          liste.append(li);
+        }
+        ziel.append(knopf, liste);
+      }
+    }
+
+    function zeichneLektionen() {
+      const ziel = el('lektionen');
+      ziel.textContent = '';
+      LEKTIONEN.forEach((l, i) => {
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.textContent = l.kurz;
+        if (i === aktuell) b.setAttribute('aria-current', 'true');
+        if (erledigt.has(i)) b.classList.add('erledigt');
+        b.addEventListener('click', () => { aktuell = i; zeigeLektion(); });
+        ziel.append(b);
+      });
+    }
+
+    function zeigeLektion() {
+      const l = LEKTIONEN[aktuell];
+      el('lektion-titel').textContent = l.titel;
+      el('lektion-text').textContent = l.text;
+      el('lektion-aufgabe').textContent = l.aufgabe;
+      el('editor').value = '';
+      zeichneLektionen();
+      meldung('', '');
+      el('ergebnis').textContent = '';
+    }
+
+    function meldung(text, art) {
+      const s = el('status');
+      s.textContent = text;
+      s.className = art;
+    }
+
+    function zeigeTabelle(ergebnis) {
+      const ziel = el('ergebnis');
+      ziel.textContent = '';
+      const t = document.createElement('table');
+      const kopf = t.createTHead().insertRow();
+      for (const spalte of ergebnis.columns) {
+        const th = document.createElement('th');
+        th.scope = 'col';
+        th.textContent = spalte;
+        kopf.append(th);
+      }
+      const rumpf = t.createTBody();
+      for (const zeile of ergebnis.values) {
+        const tr = rumpf.insertRow();
+        for (const wert of zeile) {
+          const td = tr.insertCell();
+          if (wert === null) { td.textContent = 'NULL'; td.className = 'null'; }
+          else { td.textContent = wert; if (typeof wert === 'number') td.className = 'zahl'; }
+        }
+      }
+      ziel.append(t);
+    }
+
+    /* --- 4. Abfrage ausführen und gegen die Lösung prüfen --- */
+    function normalisiert(ergebnis, reihenfolgeZaehlt) {
+      const zeilen = ergebnis.values.map(z => JSON.stringify(z.map(w => typeof w === 'number' ? Math.round(w * 100) / 100 : w)));
+      return reihenfolgeZaehlt ? zeilen : zeilen.sort();
+    }
+
+    function pruefe(nutzerErgebnis) {
+      const l = LEKTIONEN[aktuell];
+      const soll = db.exec(l.loesung)[0];
+      if (!nutzerErgebnis || !soll) return false;
+      if (nutzerErgebnis.columns.length !== soll.columns.length) return false;
+      const zaehlt = /order by/i.test(l.loesung);
+      return JSON.stringify(normalisiert(nutzerErgebnis, zaehlt)) === JSON.stringify(normalisiert(soll, zaehlt));
+    }
+
+    function ausfuehren() {
+      const sql = el('editor').value.trim();
+      if (!sql) { meldung('Schreib zuerst eine Abfrage in das Feld.', ''); return; }
+      try {
+        const ergebnisse = db.exec(sql);
+        const letztes = ergebnisse[ergebnisse.length - 1];
+        const geaendert = db.getRowsModified();
+        if (letztes) {
+          zeigeTabelle(letztes);
+          meldung(`${letztes.values.length} Zeile${letztes.values.length === 1 ? '' : 'n'} gefunden.`, '');
+        } else {
+          el('ergebnis').textContent = '';
+          meldung(`Erledigt. ${geaendert} Zeile${geaendert === 1 ? '' : 'n'} geändert. Mit "Datenbank zurücksetzen" stellst du den Anfang wieder her.`, 'gut');
+          zeichneSchema();
+        }
+        if (letztes && pruefe(letztes)) {
+          erledigt.add(aktuell);
+          meldung(`${el('status').textContent} Richtig! Aufgabe gelöst. ✓`, 'gut');
+          zeichneLektionen();
+        }
+      } catch (fehler) {
+        el('ergebnis').textContent = '';
+        meldung('Fehler: ' + fehler.message, 'fehler');
+      }
+    }
+
+    /* --- 5. Knöpfe verdrahten und starten --- */
+    el('ausfuehren').addEventListener('click', ausfuehren);
+    el('editor').addEventListener('keydown', e => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') { e.preventDefault(); ausfuehren(); }
+    });
+    el('beispiel').addEventListener('click', () => { el('editor').value = LEKTIONEN[aktuell].beispiel; el('editor').focus(); });
+    el('loesung').addEventListener('click', () => { el('editor').value = LEKTIONEN[aktuell].loesung; el('editor').focus(); });
+
+    initSqlJs({ locateFile: datei => 'lib/' + datei }).then(SQL => {
+      neueDatenbank(SQL);
+      el('zuruecksetzen').addEventListener('click', () => {
+        neueDatenbank(SQL);
+        zeichneSchema();
+        meldung('Datenbank ist wieder im Ausgangszustand.', 'gut');
+        el('ergebnis').textContent = '';
+      });
+      zeichneSchema();
+      zeigeLektion();
+    }).catch(fehler => meldung('Die Datenbank konnte nicht geladen werden: ' + fehler.message, 'fehler'));
+  </script>
+</body>
+</html>
