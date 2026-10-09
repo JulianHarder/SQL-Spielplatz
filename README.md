@@ -39,3 +39,9 @@ Einfach `index.html` im Browser öffnen – ein Doppelklick reicht. Die SQLite-D
 | `fonts/` | Inter und JetBrains Mono (SIL Open Font License) |
 
 Gebaut mit HTML, CSS und reinem JavaScript, ohne Framework. Alles liegt lokal im Ordner, zur Laufzeit wird nichts nachgeladen.
+
+## Lizenz
+
+Der SQL-Spielplatz steht unter der [MIT-Lizenz](LICENSE) – nutzen, ändern und weitergeben ist erlaubt, solange der Copyright-Hinweis mitgeht.
+
+Mitgelieferte fremde Teile behalten ihre eigene Lizenz: [sql.js](lib/LICENSE-sql.js) (MIT, SQLite selbst ist Public Domain) sowie die Schriften Inter und JetBrains Mono (SIL Open Font License).
